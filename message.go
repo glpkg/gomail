@@ -3,10 +3,25 @@ package gomail
 import (
 	"bytes"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
+type MessageArg struct {
+	To          []string
+	Title       string
+	Body        string
+	ContentType string // default: text/html
+	Attachs     []Attach
+}
+
+type Attach struct {
+	Name string
+	Path string
+}
 
 // Message represents an email.
 type Message struct {
@@ -46,6 +61,26 @@ func NewMessage(settings ...MessageSetting) *Message {
 	}
 
 	return m
+}
+
+func NewMessageWithArg(arg MessageArg) *Message {
+	msg := NewMessage()
+	if len(arg.To) > 0 {
+		msg.SetHeader("To", arg.To...)
+	}
+	if arg.Title == "" {
+		arg.Title = "无题"
+	}
+	msg.SetHeader("Subject", arg.Title)
+	contentType := arg.ContentType
+	if contentType == "" {
+		contentType = "text/html"
+	}
+	msg.SetBody(contentType, arg.Body)
+	for _, attach := range arg.Attachs {
+		msg.Attach(attach)
+	}
+	return msg
 }
 
 // Reset resets the message so it can be reused. The message keeps its previous
@@ -240,6 +275,7 @@ func SetPartEncoding(e Encoding) PartSetting {
 
 type file struct {
 	Name     string
+	Url      string
 	Header   map[string][]string
 	CopyFunc func(w io.Writer) error
 }
@@ -283,12 +319,13 @@ func SetCopyFunc(f func(io.Writer) error) FileSetting {
 	}
 }
 
-func (m *Message) appendFile(list []*file, name string, settings []FileSetting) []*file {
+func (m *Message) appendFileWithURL(list []*file, path, attachName string, settings []FileSetting) []*file {
+
 	f := &file{
-		Name:   filepath.Base(name),
+		Name:   filepath.Base(path),
 		Header: make(map[string][]string),
 		CopyFunc: func(w io.Writer) error {
-			h, err := os.Open(name)
+			h, err := os.Open(path)
 			if err != nil {
 				return err
 			}
@@ -298,6 +335,30 @@ func (m *Message) appendFile(list []*file, name string, settings []FileSetting) 
 			}
 			return h.Close()
 		},
+	}
+	// 如果没有设置附件名就用path的文件名作为附件名
+	if attachName != "" {
+		f.Name = attachName
+	}
+
+	if strings.Index(path, "http") == 0 {
+		f.Url = path
+		f.CopyFunc = func(w io.Writer) error {
+			var err error
+			resp, err := http.Get(f.Url)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(w, resp.Body)
+			if err != nil {
+				return err
+			}
+			err = resp.Body.Close()
+			if err != nil {
+				return err
+			}
+			return nil
+		}
 	}
 
 	for _, s := range settings {
@@ -311,9 +372,13 @@ func (m *Message) appendFile(list []*file, name string, settings []FileSetting) 
 	return append(list, f)
 }
 
+func (m *Message) appendFile(list []*file, path string, settings []FileSetting) []*file {
+	return m.appendFileWithURL(list, path, "", settings)
+}
+
 // Attach attaches the files to the email.
-func (m *Message) Attach(filename string, settings ...FileSetting) {
-	m.attachments = m.appendFile(m.attachments, filename, settings)
+func (m *Message) Attach(attach Attach, settings ...FileSetting) {
+	m.attachments = m.appendFileWithURL(m.attachments, attach.Path, attach.Name, settings)
 }
 
 // Embed embeds the images to the email.

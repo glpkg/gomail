@@ -33,17 +33,20 @@ type Dialer struct {
 	// LocalName is the hostname sent to the SMTP server with the HELO command.
 	// By default, "localhost" is sent.
 	LocalName string
+	// Conf is the *Dialer's config
+	Conf Config
 }
 
 // NewDialer returns a new SMTP Dialer. The given parameters are used to connect
 // to the SMTP server.
-func NewDialer(host string, port int, username, password string) *Dialer {
+func NewDialer(conf Config) *Dialer {
 	return &Dialer{
-		Host:     host,
-		Port:     port,
-		Username: username,
-		Password: password,
-		SSL:      port == 465,
+		Host:     conf.Host,
+		Port:     conf.Port,
+		Username: conf.Username,
+		Password: conf.Password,
+		SSL:      conf.Port == 465,
+		Conf:     conf,
 	}
 }
 
@@ -51,8 +54,8 @@ func NewDialer(host string, port int, username, password string) *Dialer {
 // connect to the SMTP server.
 //
 // Deprecated: Use NewDialer instead.
-func NewPlainDialer(host string, port int, username, password string) *Dialer {
-	return NewDialer(host, port, username, password)
+func NewPlainDialer(conf Config) *Dialer {
+	return NewDialer(conf)
 }
 
 // Dial dials and authenticates to an SMTP server. The returned SendCloser
@@ -128,6 +131,11 @@ func addr(host string, port int) string {
 // DialAndSend opens a connection to the SMTP server, sends the given emails and
 // closes the connection.
 func (d *Dialer) DialAndSend(m ...*Message) error {
+
+	for _, msg := range m {
+		msg.SetAddressHeader("From", d.Conf.Username, d.Conf.FromName)
+	}
+
 	s, err := d.Dial()
 	if err != nil {
 		return err

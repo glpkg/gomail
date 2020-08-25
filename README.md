@@ -1,6 +1,3 @@
-# Gomail
-[![Build Status](https://travis-ci.org/go-gomail/gomail.svg?branch=v2)](https://travis-ci.org/go-gomail/gomail) [![Code Coverage](http://gocover.io/_badge/gopkg.in/gomail.v2)](http://gocover.io/gopkg.in/gomail.v2) [![Documentation](https://godoc.org/gopkg.in/gomail.v2?status.svg)](https://godoc.org/gopkg.in/gomail.v2)
-
 ## Introduction
 
 Gomail is a simple and efficient package to send emails. It is well tested and
@@ -29,17 +26,65 @@ Gomail supports:
 
 ## Documentation
 
-https://godoc.org/gopkg.in/gomail.v2
+https://pkg.go.dev/github.com/glpkg/gomail
 
 
 ## Download
 
-    go get gopkg.in/gomail.v2
+    go get github.com/glpkg/gomail
 
 
 ## Examples
 
-See the [examples in the documentation](https://godoc.org/gopkg.in/gomail.v2#example-package).
+``` go
+package main
+
+import (
+	"github.com/glpkg/gomail"
+)
+
+var conf = gomail.Config{
+	Host:     "smtp.exmail.qq.com",
+	Port:     465,
+	Username: "邮箱账号",
+	Password: "邮箱密码",
+	FromName: "发件人名称",
+}
+
+// Send 发送邮件
+func Send(title, content, toMailAddr string) error {
+	return SendAttach(title, content, toMailAddr, "")
+}
+
+// SendAttach 发邮件带附件
+func SendAttach(title, content, toMailAddr, attachURL string) error {
+	return SendAttachSpec(title, content, toMailAddr, attachURL, "")
+}
+
+// SendAttachSpec 发送邮件附件且可命名附件名
+func SendAttachSpec(title, content, toMailAddr, attachURL, fileName string) error {
+	arg := gomail.MessageArg{
+		To:    []string{toMailAddr},
+		Title: title,
+		Body:  content,
+	}
+	if attachURL != "" {
+		arg.Attachs = append(arg.Attachs, gomail.Attach{Path: attachURL, Name: fileName})
+	}
+	return send(arg)
+}
+
+func send(arg gomail.MessageArg) error {
+	msg := gomail.NewMessageWithArg(arg)
+	dialer := gomail.NewDialer(conf)
+	err := dialer.DialAndSend(msg)
+	return err
+}
+
+func main() {
+	Send("邮件标题", "邮件内容", "接收者邮件地址")
+}
+```
 
 
 ## FAQ
@@ -84,9 +129,3 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 [MIT](LICENSE)
 
-
-## Contact
-
-You can ask questions on the [Gomail
-thread](https://groups.google.com/d/topic/golang-nuts/jMxZHzvvEVg/discussion)
-in the Go mailing-list.
